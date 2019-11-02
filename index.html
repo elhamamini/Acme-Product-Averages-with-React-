@@ -1,0 +1,226 @@
+<html lang="en">
+  <head>
+    <script src="https://unpkg.com/react@16/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@16/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.19.0/axios.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-router-dom/5.0.1/react-router-dom.js"></script>
+
+    <style>
+      nav {
+        display: flex;
+        justify-content: space-around;
+      }
+      .selected {
+        border: solid 1px black;
+        padding: 1rem;
+      }
+      .info {
+        display: flex;
+        flex-direction: column;
+        border-bottom: solid 1px black;
+      }
+      #productInfo {
+      }
+      #note {
+        padding: 4rem 5rem 4rem 6rem;
+        font-weight: 600;
+        font-size: large;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+
+  <script type="text/babel">
+    const { render } = ReactDOM;
+    const root = document.querySelector("#root");
+    const { Component } = React;
+    const { Route, Switch, HashRouter, Link, Redirect } = ReactRouterDOM;
+    const Nav = props => {
+      const path = props.location.pathname;
+      return (
+        <div>
+          <h1>Acme Product Averages React</h1>
+          <nav>
+            <Link to="/home" className={path === "/home" ? "selected" : ""}>
+              Home
+            </Link>
+            <Link
+              to="/Products"
+              className={path === "/Products" ? "selected" : ""}
+            >
+              Products
+            </Link>
+          </nav>
+        </div>
+      );
+    };
+    const averagePrice = (product, offerings) => {
+      const id = product.id;
+      const offers = offerings.filter(offer => offer.productId === id);
+
+      return (
+        offers.reduce((accu, offer) => {
+          accu += offer.price;
+          return accu;
+        }, 0) / offers.length
+      ).toFixed(2);
+    };
+    const lowPriceFinder = (product, offerings, companies) => {
+      const id = product.id;
+
+      const offers = offerings.filter(offer => offer.productId === id);
+
+      //sort by price
+      offers.sort((firstElement, nextElement) => {
+        return firstElement.price - nextElement.price;
+      });
+      console.log("offers after sort", offers);
+      const lowestPrice = offers[0].price;
+      const idOfLowest = offers[0].companyId;
+      console.log("companies", companies);
+      const company = companies.find(company => company.id === idOfLowest);
+      console.log("company", company.name);
+
+      return [lowestPrice, company.name];
+    };
+    const MatchFinder = props => {
+      // let obj={};
+
+      const obj = props.products.reduce((accu, product) => {
+        if (accu[averagePrice(product, props.offerings)] === undefined) {
+          accu[averagePrice(product, props.offerings)] = [];
+        }
+        accu[averagePrice(product, props.offerings)].push(product);
+        return accu;
+      }, {});
+      console.log("obj", obj);
+      let max = 0;
+      let productObj = {};
+      const keys = Object.keys(obj);
+      console.log("keys", keys);
+      keys.forEach(key => {
+        if (obj[key].length > max) {
+          max = obj[key].length;
+          console.log(max);
+          productObj[max] = key;
+        }
+      });
+      return (
+        // <div id="note">{`We have ${max} products with average of ${productObj[max]}`}</div>
+        <div>
+          <h2>Home</h2>
+          <div id="note">
+            We have {max} products with average of {productObj[max]}
+          </div>
+        </div>
+      );
+    };
+
+    const ProductInfo = props => {
+      return (
+        <div id="container">
+          <h2>Products</h2>
+          <div id="productInfo">
+            {props.products.map(product => (
+              <div key={product.id}>
+                <div className="info">
+                  <p>
+                    <b>Product:</b> {product.name}
+                  </p>
+
+                  <p>
+                    <b>suggested Price: </b>
+                    {product.suggestedPrice}
+                  </p>
+                  <p>
+                    <b> Average Price: </b>
+                    {averagePrice(product, props.offerings)}
+                  </p>
+                  <p>
+                    <b>Lowest Price: </b>
+                    {
+                      lowPriceFinder(
+                        product,
+                        props.offerings,
+                        props.companies
+                      )[0]
+                    }
+                    {"   "}
+                    <b>offerd by: </b>
+                    {"  "}
+                    {
+                      lowPriceFinder(
+                        product,
+                        props.offerings,
+                        props.companies
+                      )[1]
+                    }
+                  </p>
+
+                  <hr />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    class App extends Component {
+      constructor() {
+        super();
+        this.state = {
+          products: [],
+          offerings: [],
+          companies: []
+        };
+      }
+      componentDidMount() {
+        const products = fetch(`https://www.acme-api.com/api/products`);
+        const offerings = fetch("https://www.acme-api.com/api/offerings");
+        const companies = fetch("https://www.acme-api.com/api/companies");
+        Promise.all([products, offerings, companies]).then(responses => {
+          return Promise.all(responses.map(res => res.json())).then(datas => {
+            const [products, offerings, companies] = datas;
+            this.setState({ products, offerings, companies });
+          });
+        });
+      }
+      render() {
+        const { products, offerings, companies } = this.state;
+        return (
+          <HashRouter>
+            <Route component={Nav} />
+            <Route
+              path="/products"
+              render={props => (
+                <ProductInfo
+                  {...props}
+                  products={products}
+                  offerings={offerings}
+                  companies={companies}
+                />
+              )}
+            />
+            <Route
+              path="/home"
+              render={props => (
+                <MatchFinder
+                  {...props}
+                  products={products}
+                  offerings={offerings}
+                  companies={companies}
+                />
+              )}
+            />
+          </HashRouter>
+        );
+      }
+    }
+
+    render(<App />, root);
+  </script>
+</html>
